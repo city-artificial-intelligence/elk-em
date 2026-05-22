@@ -2,22 +2,106 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 
 # Notebooks / editors / OS
 .ipynb_checkpoints/
 .vscode/
 .DS_Store
 
-# Virtual environments
+# Virtual environments / env files
 .venv/
 venv/
 env/
 ENV/
+.env
+.envrc
+env.bak/
+venv.bak/
 
-# Tool caches
+# Tool caches / test / typecheck
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.dmypy.json
+dmypy.json
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+nosetests.xml
+*.cover
+*.py.cover
+cover/
 cache/
+.cache/
+
+# Packaging / build
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Logs / local databases
+*.log
+*.pid
+pip-log.txt
+pip-delete-this-directory.txt
+db.sqlite3
+db.sqlite3-journal
+celerybeat-schedule
+celerybeat.pid
+*.rdb
+*.aof
+
+# Misc local tool dirs
+instance/
+.webassets-cache
+.scrapy
+docs/_build/
+.pybuilder/
+target/
+profile_default/
+ipython_config.py
+.pdm-python
+.pdm-build/
+.pixi
+__pypackages__/
+.spyderproject
+.spyproject
+.ropeproject
+site/
+cython_debug/
+.abstra/
+tempCodeRunnerFile.py
+.pypirc
+marimo/_static/
+marimo/_lsp/
+__marimo__/
+.streamlit/secrets.toml
 
 # Experiment outputs
 checkpoints/
