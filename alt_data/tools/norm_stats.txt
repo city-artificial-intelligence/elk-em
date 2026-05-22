@@ -1,0 +1,215 @@
+(research) python data/tools/norm_stats.py data/GO/go.norm
+Parsing data/GO/go.norm ...
+Ontology: data/GO/go.norm
+============================================================
+
+Axiom counts
+  NF1  (C ⊑ D):                        68789
+  NF1b (C ⊑ ⊥):                            0
+  NF2  (C1 ⊓ C2 ⊑ D):                   9968
+  NF2b (C1 ⊓ C2 ⊑ ⊥):                    29
+  NF3  (C ⊑ ∃r.D):                     17485
+  NF4  (∃r.C ⊑ D):                      9964
+  NF4b (∃r.C ⊑ ⊥):                         0
+  NF5  (r ⊑ s):                            3
+  NF6  (r∘s ⊑ t):                          6
+  ─────────────────────────────────────────
+  Total GCI axioms:                   106235
+  Total role axioms:                       9
+
+============================================================
+
+Class entity coverage
+----------------------------------------
+Unique classes: 39355
+  mean:   5.65
+  std:    83.40
+  min:    1
+  max:    16490
+  median: 4
+
+  Top 5 by mention count:
+     16490  GO_0065007
+       435  GO_0110165
+       295  GO_0032991
+       285  GO_0016616
+       207  GO_0048856
+
+  Bottom 5 by mention count:
+         1  GO_0042187
+         1  GO_0042186
+         1  GO_0042185
+         1  GO_0031738
+         1  GO_0031737
+
+============================================================
+
+Role entity coverage
+----------------------------------------
+Unique roles: 8
+  mean:   3434.12
+  std:    3294.44
+  min:    2
+  max:    9190
+  median: 3147
+
+  Top 5 by mention count:
+      9190  BFO_0000050
+      6119  RO_0002211
+      5416  RO_0002213
+      5378  RO_0002212
+       916  BFO_0000051
+
+  Bottom 5 by mention count:
+      5378  RO_0002212
+       916  BFO_0000051
+       422  BFO_0000066
+        30  RO_0002092
+         2  RO_0002093
+
+Stats written to data/GO/stats.txt
+
+(research) python data/tools/norm_stats.py data/GALEN/full-galen.norm
+Parsing data/GALEN/full-galen.norm ...
+Ontology: data/GALEN/full-galen.norm
+============================================================
+
+Axiom counts
+  NF1  (C ⊑ D):                        27856
+  NF1b (C ⊑ ⊥):                            0
+  NF2  (C1 ⊓ C2 ⊑ D):                  12890
+  NF2b (C1 ⊓ C2 ⊑ ⊥):                     0
+  NF3  (C ⊑ ∃r.D):                     28114
+  NF4  (∃r.C ⊑ D):                     13038
+  NF4b (∃r.C ⊑ ⊥):                         0
+  NF5  (r ⊑ s):                          958
+  NF6  (r∘s ⊑ t):                         58
+  ─────────────────────────────────────────
+  Total GCI axioms:                    81898
+  Total role axioms:                    1016
+
+============================================================
+
+Class entity coverage
+----------------------------------------
+Unique classes: 23136
+  mean:   7.64
+  std:    19.85
+  min:    1
+  max:    1495
+  median: 5
+
+  Top 5 by mention count:
+      1495  NAMEDActiveDrugIngredient
+      1154  BodyStructure
+       778  pathological
+       527  nonNormal
+       499  Device
+
+  Bottom 5 by mention count:
+         1  Aconite
+         1  AboveElbowJacketCast
+         1  onTime
+         1  AirportRunway
+         1  AirportTaxiway
+
+============================================================
+
+Role entity coverage
+----------------------------------------
+Unique roles: 950
+  mean:   45.52
+  std:    167.10
+  min:    1
+  max:    2201
+  median: 3
+
+  Top 5 by mention count:
+      2201  actsSpecificallyOn
+      2043  hasAbsoluteState
+      1544  IsDivisionOf
+      1348  hasStructuralComponent
+      1331  hasSpecificLocation
+
+  Bottom 5 by mention count:
+         1  isTrendInStateOf
+         1  isMultipleSubprocessOf
+         1  isNotIngredientOf
+         1  isNotChemicalSubgroupOf
+         1  specificallyFollows
+
+Stats written to data/GALEN/stats.txt
+
+
+
+(research) python data/tools/norm_stats.py data/ANATOMY/uberon-full.norm
+Parsing data/ANATOMY/uberon-full.norm ...
+Ontology: data/ANATOMY/uberon-full.norm
+============================================================
+
+Axiom counts
+  NF1  (C ⊑ D):                        41988
+  NF1b (C ⊑ ⊥):                            0
+  NF2  (C1 ⊓ C2 ⊑ D):                  15596
+  NF2b (C1 ⊓ C2 ⊑ ⊥):                   805
+  NF3  (C ⊑ ∃r.D):                     28643
+  NF4  (∃r.C ⊑ D):                     16024
+  NF4b (∃r.C ⊑ ⊥):                        70
+  NF5  (r ⊑ s):                          284
+  NF6  (r∘s ⊑ t):                        124
+  ─────────────────────────────────────────
+  Total GCI axioms:                   103126
+  Total role axioms:                     408
+
+============================================================
+
+Class entity coverage
+----------------------------------------
+Unique classes: 25214
+  mean:   8.83
+  std:    38.21
+  min:    1
+  max:    5457
+  median: 7
+
+  Top 5 by mention count:
+      5457  GO_0065007
+      1213  GO_0048856
+       875  owl:Nothing
+       713  GO_0009653
+       517  UBERON_0000483
+
+  Bottom 5 by mention count:
+         1  UBERON_0014372
+         1  UBERON_0034680
+         1  UBERON_0035501
+         1  UBERON_0035969
+         1  UBERON_0034734
+
+============================================================
+
+Role entity coverage
+----------------------------------------
+Unique roles: 294
+  mean:   155.36
+  std:    999.24
+  min:    1
+  max:    16614
+  median: 9
+
+  Top 5 by mention count:
+     16614  BFO_0000050
+      2048  RO_0002211
+      1766  RO_0002212
+      1742  RO_0002213
+      1685  RO_0004009
+
+  Bottom 5 by mention count:
+         1  RO_0002478
+         1  RO_0002354
+         1  RO_0002481
+         1  RO_0000081
+         1  RO_0000080
+
+Stats written to data/ANATOMY/stats.txt
+(research) 

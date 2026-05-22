@@ -1,0 +1,6 @@
+Alan L Rector, Jeremy E Rogers, and Pam Pole. 1996. The GALEN high level
+ontology. In Medical Informatics Europe ’96. IOS Press, 174–178.
+
+Source: https://bioportal.bioontology.org/ontologies/GALEN
+
+This is an adaption of the original work. The axioms in different normal forms have been split into training, validation and testing sets.
