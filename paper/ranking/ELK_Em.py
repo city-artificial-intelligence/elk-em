@@ -7,9 +7,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from model.geometry import Box, Transform, Role, exist
+from paper.ranking.geometry import Box, Transform, Role, exist
 
-class Box3Model(nn.Module):
+class ELKEmModel(nn.Module):
     def __init__(self,
                 device, 
                 embedding_dim, 
@@ -69,8 +69,13 @@ class Box3Model(nn.Module):
         c    = self.class_center(ids)
         raw  = self.class_raw_offset(ids)
         is_bot = torch.isin(ids, self.bot_ids).unsqueeze(-1)  # [batch, 1]
-        half = torch.where(is_bot, raw, torch.abs(raw)+self.epsilon)  # [batch, dim]
-        return Box(lower=c - half, upper=c + half)
+        # Bot concepts are fixed to the canonical empty box [+1e9, -1e9] (§5 GCI0-BOT).
+        # Large finite sentinel keeps all arithmetic NaN-free;
+        # inclusion_loss detects emptiness via lower > upper and returns 0 (§10.1).
+        half = torch.abs(raw) + self.epsilon
+        lower = torch.where(is_bot, torch.full_like(c,  1e9), c - half)
+        upper = torch.where(is_bot, torch.full_like(c, -1e9), c + half)
+        return Box(lower=lower, upper=upper)
 
     def get_role(self, ids) -> Role:
         range_c    = self.relation_range_center(ids)
@@ -91,8 +96,11 @@ class Box3Model(nn.Module):
         return Box(lower=e, upper=e)
 
     def inclusion_loss(self, box1: Box, box2: Box) -> Tensor:
+        # §10.1: ∅ ⊆ B is always satisfied — return 0 when box1 is empty.
+        is_empty1 = (box1.lower > box1.upper).any(dim=-1)
         sep = box1.separation(box2)
-        return F.relu(sep + 2 * box1.offset + self.margin).mean(dim=-1)
+        loss_val = F.relu(sep + 2 * box1.offset + self.margin).mean(dim=-1)
+        return torch.where(is_empty1, torch.zeros_like(loss_val), loss_val)
 
     def overlap_loss(self, box1: Box, box2: Box) -> Tensor:
         d = box1.separation(box2)
@@ -147,14 +155,14 @@ class Box3Model(nn.Module):
         relation = self.get_role(data[:,1])
         d_boxes = self.get_class_box(data[:,2])
         existential = relation.existential(d_boxes)
-        return 2 * self.inclusion_loss(c_boxes, existential) + self.overlap_loss(relation.range, d_boxes)
+        return self.inclusion_loss(c_boxes, existential) + self.overlap_loss(relation.range, d_boxes)
 
     def nf4_loss(self, data) -> Tensor:
         relation = self.get_role(data[:,0])
         c_boxes = self.get_class_box(data[:,1])
         d_boxes = self.get_class_box(data[:,2])
         existential = relation.existential(c_boxes)
-        return 2 * self.inclusion_loss(existential, d_boxes) + self.overlap_loss(relation.range, c_boxes)
+        return self.inclusion_loss(existential, d_boxes) + self.overlap_loss(relation.range, c_boxes)
 
     def nf4_bot_loss(self, data) -> Tensor:
         relation = self.get_role(data[:,0])
@@ -182,21 +190,17 @@ class Box3Model(nn.Module):
         s = self.get_role(data[:, 1])
         return self.role_inclusion_loss(r, s)
 
-    def nf6_loss(self, data) -> Tensor:
+    def nf6_loss(self, data) -> tuple[Tensor, Tensor]:
+        """Returns (total_loss, compat_term) for per-component logging (§9)."""
         r1 = self.get_role(data[:, 0])
         r2 = self.get_role(data[:, 1])
         s  = self.get_role(data[:, 2])
 
-        # OWL order: r1 ; r2, r1 first, r2 second
         composed = r1.compose(r2)
-        admissible_preimage = r2.transform.inverse()(
-            r1.range.minkowski_difference(r2.error)
-        )
-
-        return (
-            self.role_inclusion_loss(composed, s)
-            + self.overlap_loss(r2.range, admissible_preimage)
-        )
+        # RI1 compatibility condition §3: T_{r2}(R_{r2}) ⊕ E_{r2} ⊆ R_{r1}
+        # Computed for logging only; excluded from training total per ablation.
+        compat = self.inclusion_loss(r2.existential(r2.range), r1.range)
+        return self.role_inclusion_loss(composed, s), compat
 
     def concept_assertion_loss(self, data) -> Tensor:
         individuals = self.get_individual(data[:,0])
@@ -232,13 +236,8 @@ class Box3Model(nn.Module):
         bot_mask = torch.zeros(self.num_classes, dtype=torch.bool, device=self.device)
         bot_mask[self.bot_ids] = True
 
-        bot_validity = F.relu(self.class_raw_offset.weight[bot_mask] + self.epsilon).mean()
-
-        # bounds = (
-        #       F.relu(self.class_center.weight.norm(dim=-1) - 10.0).pow(2).mean()
-        #       + F.relu(self.relation_range_center.weight.norm(dim=-1) - 10.0).pow(2).mean()
-        #       + F.relu(self.relation_error_center.weight.norm(dim=-1) - 2.5).pow(2).mean()
-        #  )
+        # bot_validity removed: bot boxes are now fixed via get_class_box,
+        # so raw_offset for bot_ids no longer affects the box representation.
 
         size_penalty = (
                 F.relu(torch.abs(self.class_raw_offset.weight[~bot_mask]) - 0.25).pow(2).mean()
@@ -246,7 +245,7 @@ class Box3Model(nn.Module):
                 + F.relu(torch.abs(self.relation_error_raw_offset.weight) - 0.05).pow(2).mean()
         )
 
-        return self.reg_factor * bot_validity  + size_penalty
+        return size_penalty
 
     def get_data_batch(self, train_data, key, batch_size):
         data = train_data[key]
@@ -354,18 +353,18 @@ class Box3Model(nn.Module):
 
     def forward(self, train_data):
         parts = {
-            'nf1': torch.tensor(0.0, device=self.device),
-            'nf1_bot': torch.tensor(0.0, device=self.device),
-            'nf2': torch.tensor(0.0, device=self.device),
+            'nf1':     torch.tensor(0.0, device=self.device),
+            'nf2':     torch.tensor(0.0, device=self.device),
             'nf2_bot': torch.tensor(0.0, device=self.device),
-            'nf3': torch.tensor(0.0, device=self.device),
-            'nf4': torch.tensor(0.0, device=self.device),
+            'nf3':     torch.tensor(0.0, device=self.device),
+            'nf4':     torch.tensor(0.0, device=self.device),
             'nf4_bot': torch.tensor(0.0, device=self.device),
-            'nf5': torch.tensor(0.0, device=self.device),
-            'nf6': torch.tensor(0.0, device=self.device),
+            'nf5':     torch.tensor(0.0, device=self.device),
+            'nf6':     torch.tensor(0.0, device=self.device),
         }
         neg_loss      = torch.tensor(0.0, device=self.device)
         contrast_loss = torch.tensor(0.0, device=self.device)
+        ri1_compat    = torch.tensor(0.0, device=self.device)
 
         if 'nf1' in train_data and len(train_data['nf1']) > 0:
             pos_batch = self.get_data_batch(train_data, 'nf1', self.batch_size)
@@ -381,19 +380,25 @@ class Box3Model(nn.Module):
             nf3_neg = self._sample_nf3_negatives(nf3_pos)
             contrast_loss = contrast_loss + self.contrastive_factor * self.nf3_pearson_loss(nf3_pos, nf3_neg)
 
+        # nf1_bot (GCI0-BOT) is not trained: bot boxes are fixed to canonical empty box (§5).
         for key, loss_fn in [
-            ('nf1_bot',  self.nf1_bot_loss),
             ('nf2',      self.nf2_loss),
             ('nf2_bot',  self.nf2_bot_loss),
             ('nf3',      self.nf3_loss),
             ('nf4',      self.nf4_loss),
             ('nf4_bot',  self.nf4_bot_loss),
             ('nf5',      self.nf5_loss),
-            ('nf6',      self.nf6_loss),
         ]:
             if key in train_data and len(train_data[key]) > 0:
                 batch = self.get_data_batch(train_data, key, self.batch_size)
                 parts[key] = loss_fn(batch).pow(2).mean()
+
+        # nf6 (RI1) is handled separately to capture the compat term for §9 logging.
+        if 'nf6' in train_data and len(train_data['nf6']) > 0:
+            batch = self.get_data_batch(train_data, 'nf6', self.batch_size)
+            nf6_total, compat = self.nf6_loss(batch)
+            parts['nf6'] = nf6_total.pow(2).mean()
+            ri1_compat   = compat.mean()
 
         nf1_6_loss = torch.stack(tuple(parts.values())).sum()
 
@@ -415,12 +420,13 @@ class Box3Model(nn.Module):
 
         breakdown = {key: 1000 * value.item() for key, value in parts.items()}
         breakdown.update({
-            'nf1_6':    1000 * nf1_6_loss.item(),
-            'neg':      1000 * neg_loss.item(),
-            'contrast': 1000 * contrast_loss.item(),
-            'abox':     1000 * abox_loss.item(),
-            'reg':      1000 * reg_loss.item(),
-            'total':    total.item(),
+            'nf1_6':      1000 * nf1_6_loss.item(),
+            'ri1_compat': 1000 * ri1_compat.item(),
+            'neg':        1000 * neg_loss.item(),
+            'contrast':   1000 * contrast_loss.item(),
+            'abox':       1000 * abox_loss.item(),
+            'reg':        1000 * reg_loss.item(),
+            'total':      total.item(),
         })
         return total, breakdown
 
@@ -442,7 +448,7 @@ class Box3Model(nn.Module):
             checkpoint['individual_emb'] = self.individual_emb.weight.detach()
         torch.save(checkpoint, path)
 
-class Box3ModelLoaded:
+class ELKEmModelLoaded:
     """Lightweight inference-only wrapper loaded from a checkpoint."""
 
     epsilon: float = 1e-5
@@ -498,9 +504,9 @@ class Box3ModelLoaded:
         )
 
     @staticmethod
-    def load(path: str, device, bot_ids: torch.Tensor) -> Box3ModelLoaded:
+    def load(path: str, device, bot_ids: torch.Tensor) -> ELKEmModelLoaded:
         checkpoint = torch.load(path, map_location=device)
-        loaded = Box3ModelLoaded(
+        loaded = ELKEmModelLoaded(
             class_center=checkpoint['class_center'].to(device),
             class_raw_offset=checkpoint['class_raw_offset'].to(device),
             relation_range_center=checkpoint['relation_range_center'].to(device),

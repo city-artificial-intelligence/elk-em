@@ -6,7 +6,7 @@ import numpy as np
 
 ONTOLOGIES = ['GALEN', 'GO', 'ANATOMY']
 N_SEEDS    = 5
-CKPT_DIR   = Path('checkpoints')
+CKPT_DIR   = Path('checkpoints/ranking')
 
 METRIC_RE = re.compile(
     r'eval\s+MR=([\d.]+)\s+MRR=([\d.]+)\s+Med=([\d.]+)\s+AUC=([\d.]+)'

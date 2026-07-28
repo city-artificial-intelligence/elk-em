@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 os.environ["WANDB_SILENT"] = "true"
 
 import random
+import resource
+import time
 
 import numpy as np
 import torch
@@ -12,13 +15,17 @@ from pathlib import Path
 
 
 
-from pfp_new.load_data import load_data
-from pfp_new.load_esm import load_esm_embeddings
-from pfp_new.model import Box3Model
-from pfp_new.eval import evaluate_model, flatten_eval_results
+from paper.pfp.load_data import load_data
+from paper.pfp.load_esm import load_esm_embeddings
+from paper.pfp.ELKEm4pf import ELKEm4pf
+from paper.pfp.eval import evaluate_model, flatten_eval_results
 
 
-SEED = 42
+# §5.2 revision: SEED, lex_weight, CHECKPOINT_PATH and WANDB_RUN_NAME are
+# read from environment variables so a driver script can sweep seeds and
+# configurations without editing this file. All defaults reproduce the
+# original single-seed run.
+SEED = int(os.environ.get('ELK_SEED', 42))
 SPLIT = (0.8, 0.1, 0.1)
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -33,19 +40,21 @@ MODEL_CONFIG = {
     'neg_weight': 0.5,
     'neg_k': 2,
     'neg_score': 0.4,
-    'lex_weight': 10.0,
+    'lex_weight': float(os.environ.get('ELK_LEX_WEIGHT', 10.0)),
     'lex_batch_size': 2000,
     'lex_gamma': 1.0,
 }
 
 TRAIN_CONFIG = {
     'lr': 0.01,
-    'epochs': 15000,
+    'epochs': int(os.environ.get('ELK_EPOCHS', 15000)),
     'lr_warmup_frac': 0.33,
     'log_every': 100,
 }
 
-CHECKPOINT_PATH = 'checkpoints/pfp_new/last_model.pt'
+CHECKPOINT_PATH = os.environ.get(
+    'ELK_CHECKPOINT_PATH', 'checkpoints/pfp/last_model.pt'
+)
 RUN_POST_EVAL = True
 
 EVAL_CONFIG = {
@@ -53,9 +62,9 @@ EVAL_CONFIG = {
     'score_batch_size': 4096,
 }
 
-USE_WANDB = True
-WANDB_PROJECT = 'box3el-pfp-new'
-WANDB_RUN_NAME = 'init-model-smoke'
+USE_WANDB = os.environ.get('ELK_USE_WANDB', '1') == '1'
+WANDB_PROJECT = os.environ.get('ELK_WANDB_PROJECT', 'elk-em-4pf')
+WANDB_RUN_NAME = os.environ.get('ELK_WANDB_RUN_NAME', 'init-model-smoke')
 
 
 def set_seed(seed: int) -> None:
@@ -123,7 +132,7 @@ def print_data_summary(
 
 
 def print_model_summary(
-    model: Box3Model,
+    model: ELKEm4pf,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler,
     init_loss: torch.Tensor,
@@ -169,7 +178,16 @@ def main() -> None:
         bot_ids = build_bot_ids(train_data, classes).to(DEVICE)
         model_data = move_train_data_to_device(train_data, DEVICE)
 
-        model = Box3Model(
+        # §10.1 safeguard: drop nf1 axioms whose LHS or RHS is a bot (unsatisfiable) concept.
+        # Trivially satisfied (∅ ⊆ B); bot boxes are fixed to canonical empty box in get_class_box.
+        if 'nf1' in model_data and len(model_data['nf1']) > 0:
+            in_bot = torch.isin(model_data['nf1'], bot_ids).any(dim=-1)
+            n_drop = int(in_bot.sum().item())
+            if n_drop > 0:
+                print(f'Dropping {n_drop} nf1 axiom(s) involving bot concepts')
+                model_data['nf1'] = model_data['nf1'][~in_bot]
+
+        model = ELKEm4pf(
             device=DEVICE,
             embedding_dim=MODEL_CONFIG['embedding_dim'],
             num_classes=len(classes),
@@ -250,6 +268,14 @@ def main() -> None:
                 step=0,
             )
 
+        # §5.2 revision: efficiency instrumentation. `train_wallclock_s` covers
+        # only the training loop (not eval / data-loading / checkpointing).
+        # Peak memory: torch.cuda.max_memory_allocated on GPU, else RSS from
+        # resource.getrusage (Linux ru_maxrss is in KB).
+        if DEVICE.type == 'cuda':
+            torch.cuda.reset_peak_memory_stats(DEVICE)
+        train_start = time.perf_counter()
+
         for epoch in range(1, TRAIN_CONFIG['epochs'] + 1):
             model.train()
             optimizer.zero_grad(set_to_none=True)
@@ -288,9 +314,36 @@ def main() -> None:
                     step=epoch,
                 )
 
+        train_wallclock_s = time.perf_counter() - train_start
+        if DEVICE.type == 'cuda':
+            peak_mem_bytes = int(torch.cuda.max_memory_allocated(DEVICE))
+            peak_mem_kind = 'cuda_max_allocated'
+        else:
+            peak_mem_bytes = int(
+                resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+            )
+            peak_mem_kind = 'rss_max'
+        print(
+            f'\nTrain wallclock: {train_wallclock_s:.1f}s  '
+            f'peak_mem ({peak_mem_kind}): {peak_mem_bytes / 1024**3:.2f} GB'
+        )
+
         checkpoint_path = Path(CHECKPOINT_PATH)
         model.save(str(checkpoint_path))
         print(f'\nSaved checkpoint: {checkpoint_path}\n')
+
+        efficiency = {
+            'seed': SEED,
+            'lex_weight': MODEL_CONFIG['lex_weight'],
+            'epochs': TRAIN_CONFIG['epochs'],
+            'device': str(DEVICE),
+            'train_wallclock_s': train_wallclock_s,
+            'peak_mem_bytes': peak_mem_bytes,
+            'peak_mem_kind': peak_mem_kind,
+        }
+        (checkpoint_path.parent / f'{checkpoint_path.stem}.efficiency.json').write_text(
+            json.dumps(efficiency, indent=2)
+        )
 
         eval_results = None
         if RUN_POST_EVAL:
@@ -302,6 +355,9 @@ def main() -> None:
                 neg_samples=EVAL_CONFIG['neg_samples'],
                 score_batch_size=EVAL_CONFIG['score_batch_size'],
                 seed=SEED,
+            )
+            (checkpoint_path.parent / f'{checkpoint_path.stem}.eval.json').write_text(
+                json.dumps(flatten_eval_results(eval_results), indent=2)
             )
 
         if run is not None:

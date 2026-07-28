@@ -105,12 +105,27 @@ __marimo__/
 
 # Experiment outputs
 checkpoints/
+checkpoints_v2/
+checkpoints_v2_nocompat/
 plots/
 wandb/
 slurm_logs/
-model/ADC/
-pfp_new/logs/
-pfp_new/checkpoints/
+
+# Superseded code paths (kept locally, hidden from GitHub — see paper/ instead)
+model/
+model_copy/
+pfp_new/
+pfp_new_copy/
+oldfiles/
+
+# Top-level scratch / superseded scripts (kept locally)
+benchmark_stats.py
+benchmark_stats.txt
+boxes.py
+ppi_stats.py
+ranking_result.py
+requirements.txt
+revision_results.md
 
 # Generated logs / reports
 benchmark_stats.txt

@@ -98,45 +98,16 @@ def evaluate_scores(model, key: str, data: Tensor) -> tuple[float, float, float]
 
 
 @torch.no_grad()
-def evaluate_auc(model, pairs: Tensor, num_classes: int, owl_thing_idx: int,
-                 device, chunk_size: int = 64) -> float:
-    all_ids   = torch.arange(num_classes, device=device)
-    all_boxes = model.get_class_box(all_ids)
-    ca_all    = all_boxes.center   # [M, dim]
-    oa_all    = all_boxes.offset   # [M, dim]
-
-    total_auc = 0.0
-    n_pairs   = len(pairs)
-
-    for start in range(0, n_pairs, chunk_size):
-        chunk = pairs[start : start + chunk_size]   # [Q, 2]
-        c_ids = chunk[:, 0]
-        d_ids = chunk[:, 1]
-        Q     = len(chunk)
-
-        c_boxes = model.get_class_box(c_ids)        # [Q, dim]
-        # scores[q, m] = exp(-relu(|cq - cm| + oq - om).mean(-1))
-        diff   = torch.abs(c_boxes.center.unsqueeze(1) - ca_all.unsqueeze(0))   # [Q, M, dim]
-        scores = torch.exp(-F.relu(diff + c_boxes.offset.unsqueeze(1) - oa_all.unsqueeze(0)).mean(-1))  # [Q, M]
-
-        q_idx = torch.arange(Q, device=device)
-        scores[q_idx, c_ids]     = -1.0
-        scores[:, owl_thing_idx] = -1.0
-
-        true_scores = scores[q_idx, d_ids]                          # [Q]
-        n_cands     = (scores >= 0).sum(dim=1).float()              # [Q]
-        ranks       = (scores >= true_scores.unsqueeze(1)).sum(dim=1).float()  # [Q]
-        auc_chunk   = ((n_cands - ranks) / torch.clamp(n_cands - 1, min=1)).sum()
-        total_auc  += auc_chunk.item()
-
-    return total_auc / n_pairs
-
-
-@torch.no_grad()
 def evaluate_ranking_metrics(
     model, pairs: Tensor, num_classes: int, owl_thing_idx: int,
     device, ks: tuple = (1, 10, 100), chunk_size: int = 64,
 ) -> dict:
+    """
+    Masks query concept AND owl:Thing (deliberate deviation from spec §8 D8,
+    which asks to keep owl:Thing in the candidate set — kept masked here
+    because owl:Thing saturates to score 1.0 and would dominate every tie block).
+    Ties use AVERAGE RANK (§8 D7): rank = above + (tied + 1) / 2.
+    """
     all_ids   = torch.arange(num_classes, device=device)
     all_boxes = model.get_class_box(all_ids)
     ca_all    = all_boxes.center   # [M, dim]
@@ -159,9 +130,16 @@ def evaluate_ranking_metrics(
         scores[q_idx, c_ids]     = -1.0
         scores[:, owl_thing_idx] = -1.0
 
-        true_scores = scores[q_idx, d_ids]                                          # [Q]
-        n_cands     = (scores >= 0).sum(dim=1)                                      # [Q]
-        ranks       = (scores >= true_scores.unsqueeze(1)).sum(dim=1)               # [Q]
+        true_scores = scores[q_idx, d_ids]                                  # [Q]
+        n_cands     = (scores >= 0).sum(dim=1)                              # [Q]
+
+        # §8 D7: average-rank tie policy.
+        # `tied` counts the true concept itself (it's at position d_ids), so
+        # tied ≥ 1 always. average rank = (best + worst) / 2 = above + (tied+1)/2.
+        above = (scores >  true_scores.unsqueeze(1)).sum(dim=1).float()
+        tied  = (scores == true_scores.unsqueeze(1)).sum(dim=1).float()
+        ranks = above + (tied + 1.0) / 2.0
+
         all_ranks.append(ranks.cpu())
         all_ncands.append(n_cands.cpu())
 
@@ -173,6 +151,7 @@ def evaluate_ranking_metrics(
         'med': float(rt.median()),
         'auc': float(((nt - rt) / torch.clamp(nt - 1, min=1)).mean()),
     }
+    # H@k with fractional ranks: a query counts if its (possibly fractional) rank ≤ k.
     for k in ks:
         metrics[f'hits@{k}'] = float((rt <= k).double().mean())
     return metrics
@@ -209,8 +188,8 @@ def generate_report(model, data: dict, classes: dict, val_pairs: Tensor,
 
     lines = []
 
-    # per-NF score stats on training data
-    for key in ['nf1','nf2','nf3','nf4','nf5','nf6','nf1_bot','nf2_bot','nf4_bot']:
+    # per-NF score stats on training data (nf1_bot not trained per §5).
+    for key in ['nf1','nf2','nf3','nf4','nf5','nf6','nf2_bot','nf4_bot']:
         if key in data and len(data[key]) > 0:
             mean, mn, mx = evaluate_scores(model, key, data[key])
             lines.append(f'{key:<10}  mean={mean:.4f}  min={mn:.4f}  max={mx:.4f}')

@@ -8,9 +8,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from pfp_new.geometry import Box, Role, Transform
+from paper.pfp.geometry import Box, Role, Transform
 
-class Box3Model(nn.Module):
+class ELKEm4pf(nn.Module):
     def __init__(self,
                 device,
                 embedding_dim: int,
@@ -100,8 +100,13 @@ class Box3Model(nn.Module):
         c   = self.class_center(ids)
         raw = self.class_offset_raw(ids)
         is_bot = torch.isin(ids, self.bot_ids).unsqueeze(-1)
-        half = torch.where(is_bot, raw, torch.abs(raw) + self.epsilon)
-        return Box(lower=c - half, upper=c + half)
+        # Bot concepts are fixed to the canonical empty box [+1e9, -1e9] (§5 GCI0-BOT).
+        # Large finite sentinel keeps all arithmetic NaN-free;
+        # inclusion_loss detects emptiness via lower > upper and returns 0 (§10.1).
+        half = torch.abs(raw) + self.epsilon
+        lower = torch.where(is_bot, torch.full_like(c,  1e9), c - half)
+        upper = torch.where(is_bot, torch.full_like(c, -1e9), c + half)
+        return Box(lower=lower, upper=upper)
 
     def get_role(self, ids: Tensor) -> Role:
         range_c    = self.role_range_center(ids)
@@ -129,8 +134,11 @@ class Box3Model(nn.Module):
         """0 when inner ⊆ outer. Uses separation + inner width."""
         if margin is None:
             margin = self.margin
+        # §10.1: ∅ ⊆ B is always satisfied — return 0 when inner is empty.
+        is_empty = (inner.lower > inner.upper).any(dim=-1)
         sep = inner.separation(outer)
-        return F.relu(sep + 2 * inner.offset + margin).mean(dim=-1)
+        loss_val = F.relu(sep + 2 * inner.offset + margin).mean(dim=-1)
+        return torch.where(is_empty, torch.zeros_like(loss_val), loss_val)
 
     def overlap_loss(self, box1: Box, box2: Box, margin: float | None = None) -> Tensor:
         """0 when boxes overlap."""
@@ -177,7 +185,7 @@ class Box3Model(nn.Module):
         r = self.get_role(data[:, 1])
         d = self.get_class_box(data[:, 2])
         existential = r.existential(d)
-        return 2 * self.inclusion_loss(c, existential) + self.overlap_loss(r.range, d)
+        return self.inclusion_loss(c, existential) + self.overlap_loss(r.range, d)
 
     def nf4_loss(self, data: Tensor) -> Tensor:
         """∃r.C ⊑ D  →  existential(r, box(C)) ⊆ box(D), and range(r) overlaps box(C)"""
@@ -185,7 +193,7 @@ class Box3Model(nn.Module):
         c = self.get_class_box(data[:, 1])
         d = self.get_class_box(data[:, 2])
         existential = r.existential(c)
-        return 2 * self.inclusion_loss(existential, d) + self.overlap_loss(r.range, c)
+        return self.inclusion_loss(existential, d) + self.overlap_loss(r.range, c)
 
     def nf4_bot_loss(self, data: Tensor) -> Tensor:
         """∃r.C ⊑ ⊥  →  range(r) and box(C) are disjoint"""
@@ -210,44 +218,31 @@ class Box3Model(nn.Module):
         return self._role_inclusion_loss(self.get_role(data[:, 0]),
                                          self.get_role(data[:, 1]))
 
-    def nf6_loss(self, data: Tensor) -> Tensor:
-        """r ∘ s ⊑ t"""
+    def nf6_loss(self, data: Tensor) -> tuple[Tensor, Tensor]:
+        """r ∘ s ⊑ t — returns (total_loss, compat_term) for §9 logging."""
         r = self.get_role(data[:, 0])
         s = self.get_role(data[:, 1])
         t = self.get_role(data[:, 2])
         composed = r.compose(s)
-        admissible = s.transform.inverse()(r.range.minkowski_difference(s.error))
-        return (
-            self._role_inclusion_loss(composed, t)
-            + self.overlap_loss(s.range, admissible)
-        )
+        # RI1 compatibility condition §3: T_s(R_s) ⊕ E_s ⊆ R_r
+        # Computed for logging only; excluded from training total per ablation.
+        compat = self.inclusion_loss(s.existential(s.range), r.range)
+        return self._role_inclusion_loss(composed, t), compat
 
     # ------------------------------------------------------------------
     # Regularisation
     # ------------------------------------------------------------------
 
     def box_regularisation_loss(self) -> Tensor:
-        device = self.bot_ids.device
-
-        bot_mask = torch.zeros(self.num_classes, dtype=torch.bool, device=device)
-        bot_mask[self.bot_ids] = True
-
-        # Bot classes should stay empty/inverted.
-        bot_validity = F.relu(
-            self.class_offset_raw.weight[bot_mask] + self.epsilon
-        ).mean()
+        # bot_validity removed: bot boxes are now fixed via get_class_box,
+        # so class_offset_raw for bot_ids no longer affects the box representation.
 
         # Role-error offsets should stay <= 0.01 in magnitude.
         size_penalty = F.relu(
             self.role_error_offset_raw.weight.abs() - 0.01
         ).mean()
 
-        # centers = torch.cat(
-        #     [self.class_center.weight, self.role_range_center.weight, self.individual_emb.weight], dim=0
-        # )
-        # center_penalty = F.relu(centers.norm(p=1, dim=-1) - 1.0).mean()
-
-        return bot_validity + size_penalty #+  + center_penalty
+        return size_penalty
 
     # ------------------------------------------------------------------
     # Batch sampling helper
@@ -336,16 +331,15 @@ class Box3Model(nn.Module):
         device = self.bot_ids.device
 
         # --- TBox ---
+        # nf1_bot (GCI0-BOT) is not trained: bot boxes are fixed to canonical empty box (§5).
         tbox_keys = [
             ('nf1',     self.nf1_loss),
-            ('nf1_bot', self.nf1_bot_loss),
             ('nf2',     self.nf2_loss),
             ('nf2_bot', self.nf2_bot_loss),
             ('nf3',     self.nf3_loss),
             ('nf4',     self.nf4_loss),
             ('nf4_bot', self.nf4_bot_loss),
             ('nf5',     self.nf5_loss),
-            ('nf6',     self.nf6_loss),
         ]
         parts: dict[str, Tensor] = {}
         for key, fn in tbox_keys:
@@ -354,6 +348,16 @@ class Box3Model(nn.Module):
                 parts[key] = fn(batch).pow(2).mean()
             else:
                 parts[key] = torch.zeros(1, device=device).squeeze()
+
+        # nf6 (RI1) handled separately so we can log the compat term for §9.
+        ri1_compat_val = torch.zeros(1, device=device).squeeze()
+        if 'nf6' in train_data and len(train_data['nf6']) > 0:
+            batch = self.get_batch(train_data['nf6'], self.batch_size)
+            nf6_total, compat = self.nf6_loss(batch)
+            parts['nf6']   = nf6_total.pow(2).mean()
+            ri1_compat_val = compat.mean()
+        else:
+            parts['nf6'] = torch.zeros(1, device=device).squeeze()
 
         tbox_loss = torch.stack(list(parts.values())).pow(2).mean()
 
@@ -383,12 +387,13 @@ class Box3Model(nn.Module):
                 + self.reg_factor * reg_loss)
 
         breakdown = {k: 1000 * v.item() for k, v in parts.items()}
-        breakdown['tbox']   = 1000 * tbox_loss.item()
-        breakdown['ca_pos'] = 1000 * self.ca_weight  * ca_pos_l.item()
-        breakdown['ca_neg'] = 1000 * self.neg_weight * ca_neg_l.item()
-        breakdown['lex']    = 1000 * self.lex_weight * lex_l.item()
-        breakdown['reg']    = 1000 * self.reg_factor * reg_loss.item()
-        breakdown['total']  = total.item()
+        breakdown['tbox']       = 1000 * tbox_loss.item()
+        breakdown['ri1_compat'] = 1000 * ri1_compat_val.item()
+        breakdown['ca_pos']     = 1000 * self.ca_weight  * ca_pos_l.item()
+        breakdown['ca_neg']     = 1000 * self.neg_weight * ca_neg_l.item()
+        breakdown['lex']        = 1000 * self.lex_weight * lex_l.item()
+        breakdown['reg']        = 1000 * self.reg_factor * reg_loss.item()
+        breakdown['total']      = total.item()
         return total, breakdown
 
     # ------------------------------------------------------------------
@@ -413,10 +418,14 @@ class Box3Model(nn.Module):
         torch.save(state, path)
 
     @classmethod
-    def load(cls, path: str, device: torch.device, bot_ids: Tensor, **kwargs) -> Box3Model:
+    def load(cls, path: str, device: torch.device, bot_ids: Tensor, **kwargs) -> ELKEm4pf:
         state = torch.load(path, map_location=device)
         dim = state['embedding_dim']
-        model = cls(embedding_dim=dim, bot_ids=bot_ids, **kwargs)
+        # `device` must be forwarded to __init__ — omitted in the original
+        # implementation, which caused `.load()` to raise TypeError. Also
+        # drop any `embedding_dim` in kwargs so we don't double-specify it.
+        kwargs.pop('embedding_dim', None)
+        model = cls(device=device, embedding_dim=dim, bot_ids=bot_ids, **kwargs)
         model.class_center.weight.data.copy_(state['class_center'])
         model.class_offset_raw.weight.data.copy_(state['class_offset_raw'])
         model.role_range_center.weight.data.copy_(state['role_range_center'])

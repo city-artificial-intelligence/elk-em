@@ -7,7 +7,7 @@ from pathlib import Path
 
 import torch
 
-from model.load_data import load_bins as load_tbox_bins, load_inferences
+from paper.ranking.load_data import load_bins as load_tbox_bins, load_inferences
 
 
 _BOX3EL_ROOT = Path(__file__).resolve().parents[1]

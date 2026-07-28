@@ -1,45 +1,21 @@
 # ELK-Em
-ELK-Em: Closure-Aware Embeddings for EL++ Ontologies
 
-## Instructions to run the codes
+Closure-Aware Embeddings for ℰℒ+⊥ Ontologies.
 
-### 1. Deductive-closure model - `model/train.sh`
+Reproduction code for the paper's §5.1 (ranking entailed atomic subsumptions
+on GALEN / GO / Anatomy) and §5.2 (inductive protein-function prediction on
+CAFA5) lives under [paper/](paper/). See [paper/README.md](paper/README.md)
+for end-to-end reproduction instructions.
 
-Reported numbers are the mean ± std over **five seeds (0-4)** per ontology.
+Data ships in [data/](data/) (Box2EL benchmark for §5.1) and
+[alt_data/GO/](alt_data/GO/) (CAFA5 human protein–function annotations and
+ESM-2 embeddings for §5.2).
 
-`model/train.sh` runs one ontology and one seed per SLURM submission. To reproduce all reported results, edit the final `srun` line in `model/train.sh` for each ontology (`GALEN`, `GO`, `ANATOMY`) and seed (`0`, `1`, `2`, `3`, `4`), then submit the script once for each combination.
+## Publications
 
-Submit one job at a time with:
+Naman Singh, Ernesto Jiménez-Ruiz, Tillman Weyde.
+*ELK-Em: Closure-Aware Embeddings for ℰℒ+⊥ Ontologies.*
+KG-NeSy 2026 (workshop at ISWC 2026).
 
-```bash
-sbatch model/train.sh
-```
-
-Each job writes `checkpoints/<ONT>/seed_<seed>/report.txt`.
-
-After all 15 jobs have finished, average the results with:
-
-```bash
-python -m model.summarise
-```
-
-### 2. Lexical-regularisation ablation - `pfp_new/train.sh`
-
-This ablation uses two SLURM submissions that differ only in `MODEL_CONFIG['lex_weight']` in `pfp_new/train.py`.
-
-For the lexical-regularisation run, set `lex_weight` to `10.0`, then submit:
-
-```bash
-sbatch pfp_new/train.sh
-```
-
-For the ablation without lexical regularisation, set `lex_weight` to `0.0`, then submit again:
-
-```bash
-sbatch pfp_new/train.sh
-```
-
-Each job trains the model, saves `checkpoints/pfp_new/last_model.pt`, and writes evaluation metrics to its log under `pfp_new/logs/`. Compare the two logs.
-
-### Publications
-Naman Singh, Ernesto Jiménez-Ruiz, and Tillman Weyde, **ELK-Em: Closure-Aware Embeddings for EL++ Ontologies (Technical Report)**. 2026. [[PDF](https://github.com/city-artificial-intelligence/elk-em/blob/main/elk-em-report-may-2026.pdf)]
+Technical report:
+[elk-em-report-may-2026.pdf](elk-em-report-may-2026.pdf).

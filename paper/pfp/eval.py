@@ -6,14 +6,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from pfp_new.load_data import ProteinFunctionSplits, load_data
-from pfp_new.model import Box3Model
+from paper.pfp.load_data import ProteinFunctionSplits, load_data
+from paper.pfp.ELKEm4pf import ELKEm4pf
 
 import torch.nn.functional as F
 from torch import Tensor
 
 
-CHECKPOINT_PATH = 'checkpoints/pfp_new/last_model.pt'
+CHECKPOINT_PATH = 'checkpoints/pfp/last_model.pt'
 
 SEED = 42
 SPLIT = (0.8, 0.1, 0.1)
@@ -47,7 +47,7 @@ def build_bot_ids(train_data: dict[str, object], classes: dict[str, int]) -> tor
 
 @torch.no_grad()
 def score_pairs(
-    model: Box3Model,
+    model: ELKEm4pf,
     pairs: torch.Tensor,
     batch_size: int = SCORE_BATCH_SIZE,
 ) -> torch.Tensor:
@@ -264,7 +264,7 @@ def _build_closed_truth_matrix(
 
 @torch.no_grad()
 def fmax_concept_assertions_closure(
-    model: Box3Model,
+    model: ELKEm4pf,
     pairs: torch.Tensor,
     device: torch.device,
     closure_t: torch.Tensor,
@@ -409,7 +409,7 @@ def fmax_concept_assertions_closure(
 
 @torch.no_grad()
 def evaluate_model(
-    model: Box3Model,
+    model: ELKEm4pf,
     train_data: dict[str, object],
     pf_splits: ProteinFunctionSplits,
     classes: dict[str, int],
@@ -569,7 +569,7 @@ def main() -> None:
 
     bot_ids = build_bot_ids(train_data, classes).to(DEVICE)
 
-    model = Box3Model.load(
+    model = ELKEm4pf.load(
         path=str(checkpoint_path),
         device=DEVICE,
         bot_ids=bot_ids,
