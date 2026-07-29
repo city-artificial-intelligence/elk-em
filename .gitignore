@@ -131,6 +131,7 @@ revision_results.md
 benchmark_stats.txt
 *.out
 *.err
+elk-em-report-may-2026.pdf
 
 # Keep only the requested alt_data subsets
 alt_data/ANATOMY/
