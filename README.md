@@ -11,11 +11,5 @@ Data ships in [data/](data/) (Box2EL benchmark for §5.1) and
 [alt_data/GO/](alt_data/GO/) (CAFA5 human protein–function annotations and
 ESM-2 embeddings for §5.2).
 
-## Publications
-
-Naman Singh, Ernesto Jiménez-Ruiz, Tillman Weyde.
-*ELK-Em: Closure-Aware Embeddings for ℰℒ+⊥ Ontologies.*
-KG-NeSy 2026 (workshop at ISWC 2026).
-
 Technical report:
 [elk-em-report-may-2026.pdf](elk-em-report-may-2026.pdf).
