@@ -12,4 +12,4 @@ Data ships in [data/](data/) (Box2EL benchmark for §5.1) and
 ESM-2 embeddings for §5.2).
 
 Technical report:
-[elk-em-report-may-2026.pdf](elk-em-report-may-2026.pdf).
+[CR-ELKEm-TR.pdf](CR-ELKEm-TR.pdf])
