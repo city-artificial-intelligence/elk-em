@@ -11,5 +11,4 @@ Data ships in [data/](data/) (Box2EL benchmark for §5.1) and
 [alt_data/GO/](alt_data/GO/) (CAFA5 human protein–function annotations and
 ESM-2 embeddings for §5.2).
 
-Technical report:
-[CR-ELKEm-TR.pdf](CR-ELKEm-TR.pdf])
+Technical report: CR-ELKEm-TR.pdf
