@@ -56,7 +56,9 @@ Both experiments read datasets shipped with this repository:
   [alt_data/GO/](../alt_data/GO/):
   `alt_data/GO/bins/*.npy` (normalised GO TBox),
   `alt_data/GO/DELEclosure/nf1.npy` (candidate-closure graph),
-  `alt_data/GO/cafa-5/{train_terms.tsv,human_proteins.fasta,esm2_480.h5}`.
+  `alt_data/GO/cafa-5/{human_proteins.fasta,esm2_480.h5}`, and
+  `alt_data/GO/cafa-5/train_terms.tsv`, obtained by running
+  `alt_data/GO/cafa-5/fetch_data.sh` (not redistributed here).
   `esm2_480.h5` contains 480-d ESM-2 (t12, 35M) embeddings mean-pooled over
   residues.
 

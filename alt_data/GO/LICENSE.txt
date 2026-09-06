@@ -1,0 +1,31 @@
+Gene Ontology (go.owl, go.norm, go.normalized.owl, gci0_ontology.owl, bins/,
+DELEclosure/)
+
+Michael Ashburner, Catherine A Ball, Judith A Blake, David Botstein, Heather
+Butler, J Michael Cherry, Allan P Davis, Kara Dolinski, Selina S Dwight, Janan T
+Eppig, et al. 2000. Gene ontology: tool for the unification of biology. Nature
+genetics 25, 1 (2000), 25-29.
+
+Source: https://geneontology.org/
+Data is made available under the terms of the CC BY 4.0 license.
+This is an adaption of the original work: the ontology has been normalised into
+EL+bot normal forms and the resulting axioms split into bins.
+
+---
+
+Protein sequences (human_proteins.fasta, cafa5_proteins.txt) and derived
+ESM-2 representations (esm2_480.h5)
+
+Sequences originate from UniProtKB (https://www.uniprot.org/), available under
+CC BY 4.0. Representations were computed with ESM-2 (esm2_t12_35M_UR50D),
+released by Meta AI under the MIT license:
+Zeming Lin, Halil Akin, Roshan Rao, Brian Hie, et al. 2023. Evolutionary-scale
+prediction of atomic-level protein structure with a language model. Science
+379, 6637 (2023), 1123-1130.
+
+---
+
+CAFA 5 competition data is NOT redistributed in this repository. Run
+cafa-5/fetch_data.sh to obtain it from Kaggle under the competition's terms.
+CAFA 5 is co-chaired by Iddo Friedberg (Iowa State University) and Predrag
+Radivojac (Northeastern University).

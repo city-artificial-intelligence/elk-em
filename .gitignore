@@ -137,3 +137,8 @@ elk-em-report-may-2026.pdf
 alt_data/ANATOMY/
 alt_data/GALEN/
 alt_data/HPO/
+# CAFA 5 competition data — fetched from Kaggle, not redistributed
+alt_data/GO/cafa-5/Train/
+alt_data/GO/cafa-5/Test (Targets)/
+alt_data/GO/cafa-5/IA.txt
+alt_data/GO/cafa-5/sample_submission.tsv

@@ -4,3 +4,7 @@ ontology. In Medical Informatics Europe ’96. IOS Press, 174–178.
 Source: https://bioportal.bioontology.org/ontologies/GALEN
 
 This is an adaption of the original work. The axioms in different normal forms have been split into training, validation and testing sets.
+
+Obtained via the Box2EL benchmark distribution. The original GALEN ontology is
+distributed by OpenGALEN (https://www.opengalen.org/) and via BioPortal under
+its own terms; refer to the source for applicable licensing conditions.
