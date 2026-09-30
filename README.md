@@ -13,4 +13,4 @@ embeddings for §5.2). The CAFA 5 competition files are not redistributed here;
 run [alt_data/GO/cafa-5/fetch_data.sh](alt_data/GO/cafa-5/fetch_data.sh) to
 obtain them from Kaggle under the competition's terms.
 
-Technical report: CR-ELKEm-TR.pdf
+Technical report: [CR-ELKEm-TR.pdf](https://github.com/city-artificial-intelligence/elk-em/blob/main/CR-ELKEm-TR.pdf)
